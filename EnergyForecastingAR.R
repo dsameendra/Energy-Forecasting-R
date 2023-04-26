@@ -6,11 +6,11 @@ library(tidyverse)
 library(MLmetrics)
 library(ggplot2)
 
-library(plotly)
-library(caTools)
-library(useful)
-library(tictoc)
-library(Metrics)
+#library(plotly)
+#library(caTools)
+#library(useful)
+#library(tictoc)
+#library(Metrics)
 
 # Normalize function
 normalize <- function(x) {
@@ -75,7 +75,6 @@ df_scaled <- as.data.frame(lapply(df_delayed[4:9], normalize))
 # Add the 2000H column back to the scaled data frame
 df_scaled <- cbind(OG_2000H = df_delayed$`2000H`, df_scaled)
 dim(df_scaled)
-boxplot(df_scaled[-1]) # view boxplot after normalizing without og 2000H column
 
 # Train-test Split
 df_scaled_train <- df_scaled[1:380,]
@@ -85,20 +84,28 @@ df_scaled_test = df_scaled[380:463,]
 #train_inputs <- data.matrix(df_scaled_train[, 2:6])
 #train_outputs <- data.matrix(df_scaled_train$`X2000H`)
 
-IO_1 <- `X2000H`~t1+t2
-IO_2 <- `X2000H`~t2+t3+t4
+IO_1 <- `X2000H`~t1
+IO_2 <- `X2000H`~t1+t2+t3
 IO_3 <- `X2000H`~t1+t2+t3+t7
 IO_4 <- `X2000H`~t1+t2+t3+t4+t7
 
+hidden_layer_1 <- c(5)
+hidden_layer_2 <- c(5,10)
+hidden_layer_3 <- c(15)
+hidden_layer_4 <- c(8,4)
+
+acti_func_1 <- "logistic"
+acti_func_2 <- "tanh"
+
+# Training
 time_start <- Sys.time()
-model_1 <-
-  neuralnet(
-    IO_4,
-    data = df_scaled_train,
-    hidden = c(5,10,20),
-    act.fct = "tanh",
-    linear.output = F
-  )
+model_1 <- neuralnet(
+  IO_4,
+  data = df_scaled_train,
+  hidden = hidden_layer_2,
+  act.fct = "logistic",
+  linear.output = F
+)
 time_end <- Sys.time()
 time_train <- time_end-time_start
 print(time_train)
@@ -110,6 +117,7 @@ model_1$result.matrix
 # plotting nn model
 plot(model_1)
 
+# Testing
 # Compute predictions on test dataset
 model_1_results <- predict(model_1, df_scaled_test)
 predictions <- model_1_results
@@ -122,6 +130,7 @@ actuals <- df_scaled_test$`OG_2000H`
 comparison = data.frame(predictions_denormalized,actuals)
 print(comparison)
 
+# Evaluating
 # Calculate evaluation metrics for the predictions
 rmse <- RMSE(actuals, predictions_denormalized)
 mae <- MAE(actuals, predictions_denormalized)
