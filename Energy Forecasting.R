@@ -3,14 +3,30 @@ library(neuralnet)
 library(dplyr)
 library(data.table)
 library(tidyverse)
+library(MLmetrics)
+library(ggplot2)
 
 library(plotly)
 library(caTools)
 library(useful)
 library(tictoc)
 library(Metrics)
-library(ggplot2)
-library(MLmetrics)
+
+# Normalize function
+normalize <- function(x) {
+  (x - min(x)) / (max(x) - min(x))
+}
+
+# De-normalizing function
+denormalize <- function(x, min, max) {
+  return( (max - min)*x + min )
+}
+
+# Function for calculating smape as it is not included in MLmetrics
+sMAPE <- function(actual, predicted){
+  200/length(actual) * sum(abs(actual - predicted)/(abs(actual) + abs(predicted)))
+}
+
 
 # Loading the dataset
 df <- read_excel("./datasets/uow_consumption.xlsx")
@@ -25,6 +41,14 @@ colnames(df)[3] <- "1900H"
 colnames(df)[4] <- "2000H"
 df
 
+# Plot data
+ggplot(df, aes(x = date, y = `2000H`)) +
+  geom_line() +
+  labs(title = "Hourly Electricity Consumption at 2000H",
+       x = "Date",
+       y = "Electricity Consumption (kWh)")
+
+
 # Create time-delayed versions of the "2000H" column up to t4 and t7
 df_delayed <- df %>% 
   mutate(t1 = lag(`2000H`, n = 1),
@@ -33,76 +57,76 @@ df_delayed <- df %>%
          t4 = lag(`2000H`, n = 4),
          t7 = lag(`2000H`, n = 7))
 
-# Drop the first 7 rows as delayed values have NA
+# Remove those rows with NA due to shift
 df_delayed <- slice(df_delayed, 8:nrow(df_delayed))
+df_delayed <- df_delayed[complete.cases(df_delayed),]
 
-#shift and create new columns
-df_shifted <- shift.column(data=df, columns="2000H",len = 1, up = FALSE,newNames = sprintf("t1", "2000H"))
-df_shifted <- shift.column(data=df_shifted, columns="2000H",len = 2, up = FALSE,newNames = sprintf("t2", "2000H"))
-df_shifted <- shift.column(data=df_shifted, columns="2000H",len = 3, up = FALSE,newNames = sprintf("t3", "2000H"))
-df_shifted <- shift.column(data=df_shifted, columns="2000H",len = 4, up = FALSE,newNames = sprintf("t4", "2000H"))
-df_shifted <- shift.column(data=df_shifted, columns="2000H",len = 7, up = FALSE,newNames = sprintf("t7", "2000H"))
+# Getting the minimum and maximum values for 2000H
+min_value <- min(df[4])
+max_value <- max(df[4])
 
-#z-score normalization
-df_scaled <- as.data.frame(df_delayed %>% mutate_at(vars(-date), scale, center=T)) # Drop dates Column
-df_scaled <- within(df_scaled, rm(date))
-df_scaled
+# View the minimum and maximum values
+print(min_value)
+print(max_value)
 
-# Normalize function
-normalize <- function(x) {
-  (x - min(x)) / (max(x) - min(x))
-}
-
-#Scalling with normalize function
+#Scaling with normalize function
 df_scaled <- as.data.frame(lapply(df_delayed[4:9], normalize))
-df_scaled <- cbind(df_scaled, df_delayed[c(4)])
+
+# Add the 2000H column back to the scaled data frame
+df_scaled <- cbind(OG_2000H = df_delayed$`2000H`, df_scaled)
+dim(df_scaled)
+boxplot(df_scaled[-1]) # view boxplot after normalizing without og 2000H column
 
 # Train-test Split
-df_scaled_train = head(df_scaled, n =380)
-df_scaled_test = tail(df_scaled, n =73)
+df_scaled_train <- df_scaled[1:380,]
+df_scaled_test = df_scaled[380:463,]
 
 # Create the input and output matrices
-train_inputs <- data.matrix(df_scaled_train[, 4:8])
-train_outputs <- data.matrix(df_scaled_train$`2000H`)
-train_inputs
-train_outputs
+#train_inputs <- data.matrix(df_scaled_train[, 2:6])
+#train_outputs <- data.matrix(df_scaled_train$`X2000H`)
 
+IO_1 <- `X2000H`~t1+t2
+IO_2 <- `X2000H`~t2+t3+t4
+IO_3 <- `X2000H`~t1+t2+t3+t7
+IO_4 <- `X2000H`~t1+t2+t3+t4+t7
 
-formula_1 <- `2000H`~t1+t2+t3+t4+t7
-model_1 <- neuralnet(formula_1, data = df_scaled_train, hidden = c(5), rep = 5, act.fct = "logistic", threshold = 2, linear.output = F)
+time_start <- Sys.time()
+model_1 <-
+  neuralnet(
+    IO_4,
+    data = df_scaled_train,
+    hidden = c(5,10,20),
+    act.fct = "tanh",
+    linear.output = F
+  )
+time_end <- Sys.time()
+time_train <- time_end-time_start
+print(time_train)
+
 # look at the parameters inside the above code
 summary(model_1)
+model_1$result.matrix
+
+# plotting nn model
 plot(model_1)
-class(model_1)
+
 # Compute predictions on test dataset
-model_1.results <- predict(model_1, df_scaled_test)
-predictions <- model_1.results
-predictions
+model_1_results <- predict(model_1, df_scaled_test)
+predictions <- model_1_results
 
 # Convert predictions back to the original scale
-predictions_unscaled <- predictions * sd(df_scaled_test$`2000H`) + mean(df_scaled_test$`2000H`)
-predictions_unscaled
-  
-test_col <- df_scaled_test$`2000H`
+predictions_denormalized <- denormalize(predictions, min_value, max_value)
 
-# Then, unscale the column using the mean and standard deviation of the training data
-test_col_unscaled <- scale(test_col, center = -mean(df$`2000H`), scale = 1/sd(df$`2000H`))
-test_col_unscaled
+actuals <- df_scaled_test$`OG_2000H`
 
-train_col_unscaled <- scale(predictions, center = -mean(df$`2000H`), scale = 1/sd(df$`2000H`))
-train_col_unscaled
-
+comparison = data.frame(predictions_denormalized,actuals)
+print(comparison)
 
 # Calculate evaluation metrics for the predictions
-rmse <- RMSE(train_col_unscaled, test_col_unscaled)
-mae <- MAE(train_col_unscaled, test_col_unscaled)
-mape <- MAPE(train_col_unscaled, test_col_unscaled)
-
-
-sMAPE <- function(actual, predicted){
-  200/length(actual) * sum(abs(actual - predicted)/(abs(actual) + abs(predicted)))
-}
-smape <- sMAPE(train_col_unscaled, test_col_unscaled)
+rmse <- RMSE(actuals, predictions_denormalized)
+mae <- MAE(actuals, predictions_denormalized)
+mape <- MAPE(actuals, predictions_denormalized)
+smape <- sMAPE(actuals, predictions_denormalized)
 
 cat("RMSE:", rmse, "\n")
 cat("MAE:", mae, "\n")
