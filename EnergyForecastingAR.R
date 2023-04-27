@@ -1,16 +1,9 @@
 library(readxl) # for reading Excel files
 library(neuralnet)
 library(dplyr)
-library(data.table)
-library(tidyverse)
 library(MLmetrics)
 library(ggplot2)
-
-#library(plotly)
-#library(caTools)
-#library(useful)
-#library(tictoc)
-#library(Metrics)
+library(tidyverse)
 
 # Normalize function
 normalize <- function(x) {
@@ -35,20 +28,24 @@ dim(df)
 str(df)
 summary(df)
 
+
 # Change column names
 colnames(df)[2] <- "1800H"
 colnames(df)[3] <- "1900H"
 colnames(df)[4] <- "2000H"
 df
 
-# Plot data
+# Summary of 20th hour
+summary(df$`2000H`)
+
+# Plotting 20th hour data
 ggplot(df, aes(x = date, y = `2000H`)) +
   geom_line() +
   labs(title = "Hourly Electricity Consumption at 2000H",
        x = "Date",
        y = "Electricity Consumption (kWh)")
 
-
+# Creating IO Matrix
 # Create time-delayed versions of the "2000H" column up to t4 and t7
 df_delayed <- df %>% 
   mutate(t1 = lag(`2000H`, n = 1),
@@ -58,7 +55,7 @@ df_delayed <- df %>%
          t7 = lag(`2000H`, n = 7))
 
 # Remove those rows with NA due to shift
-df_delayed <- slice(df_delayed, 8:nrow(df_delayed))
+#df_delayed <- slice(df_delayed, 8:nrow(df_delayed))
 df_delayed <- df_delayed[complete.cases(df_delayed),]
 
 # Getting the minimum and maximum values for 2000H
@@ -70,68 +67,84 @@ print(min_value)
 print(max_value)
 
 #Scaling with normalize function
-df_scaled <- as.data.frame(lapply(df_delayed[4:9], normalize))
+df_scaled <- as.data.frame(lapply(df_delayed[4:9], normalize)) # only 2000H and delayed values are taken
 
-# Add the 2000H column back to the scaled data frame
+# Adding the 2000H column back to the scaled data frame
 df_scaled <- cbind(OG_2000H = df_delayed$`2000H`, df_scaled)
 dim(df_scaled)
 
 # Train-test Split
 df_scaled_train <- df_scaled[1:380,]
-df_scaled_test = df_scaled[380:463,]
+df_scaled_test = df_scaled[381:nrow(df_scaled),]
+dim(df_scaled_train)
+dim(df_scaled_test)
 
-# Create the input and output matrices
-#train_inputs <- data.matrix(df_scaled_train[, 2:6])
-#train_outputs <- data.matrix(df_scaled_train$`X2000H`)
-
+## Creating Different Input/Output Formulas
 IO_1 <- `X2000H`~t1
 IO_2 <- `X2000H`~t1+t2+t3
 IO_3 <- `X2000H`~t1+t2+t3+t7
 IO_4 <- `X2000H`~t1+t2+t3+t4+t7
 
-hidden_layer_1 <- c(5)
-hidden_layer_2 <- c(5,10)
-hidden_layer_3 <- c(15)
-hidden_layer_4 <- c(8,4)
+## Creating Different Internal Structures
 
-acti_func_1 <- "logistic"
-acti_func_2 <- "tanh"
+# Hidden Layer Structures
+hl5 <- c(5)
+hl5_10 <- c(5,10)
+hl15 <- c(15)
+hl12 <- c(12)
+hl8_4 <- c(8,4)
+ht4_8 <- c(4,8)
+hl6_6 <- c(6,6)
+hl6_2 <- c(6,2)
+hl4_4 <- c(4,4)
+hl20_50 <- c(20,50)
 
-# Training
+# Activation Functions
+acti_func_L <- "logistic"
+acti_func_T <- "tanh"
+
+## Training
+
+set.seed(42) # setting a seed for training to be consistent
 time_start <- Sys.time()
-model_1 <- neuralnet(
-  IO_4,
+model_AR <- neuralnet(
+  IO_3,
   data = df_scaled_train,
-  hidden = hidden_layer_2,
-  act.fct = "logistic",
+  hidden = c(20),
+  act.fct = acti_func_T,
   linear.output = F
 )
-time_end <- Sys.time()
-time_train <- time_end-time_start
-print(time_train)
+time_finish <- Sys.time()
+time_train <- time_finish-time_start
+cat("Time to train: ", time_train, "s. \n")
 
 # look at the parameters inside the above code
-summary(model_1)
-model_1$result.matrix
+summary(model_AR)
+
+# Result matrix (information about learned weights)
+model_AR$result.matrix
 
 # plotting nn model
-plot(model_1)
+plot(model_AR)
 
-# Testing
+
+## Testing
 # Compute predictions on test dataset
-model_1_results <- predict(model_1, df_scaled_test)
+model_1_results <- predict(model_AR, df_scaled_test)
 predictions <- model_1_results
 
-# Convert predictions back to the original scale
+# Converting predictions back to the original scale
 predictions_denormalized <- denormalize(predictions, min_value, max_value)
 
+# Getting the actual values from testset
 actuals <- df_scaled_test$`OG_2000H`
 
 comparison = data.frame(predictions_denormalized,actuals)
 print(comparison)
 
-# Evaluating
-# Calculate evaluation metrics for the predictions
+
+## Evaluating
+# Calculating required evaluation metrics for the predictions
 rmse <- RMSE(actuals, predictions_denormalized)
 mae <- MAE(actuals, predictions_denormalized)
 mape <- MAPE(actuals, predictions_denormalized)

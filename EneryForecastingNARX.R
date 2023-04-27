@@ -1,7 +1,6 @@
 library(readxl) # for reading Excel files
 library(neuralnet)
 library(dplyr)
-library(data.table)
 library(tidyverse)
 library(MLmetrics)
 library(ggplot2)
@@ -52,7 +51,7 @@ df_delayed <- df %>%
          t7 = lag(`2000H`, n = 7))
 
 # Remove those rows with NA due to shift
-df_delayed <- slice(df_delayed, 8:nrow(df_delayed))
+#df_delayed <- slice(df_delayed, 8:nrow(df_delayed))
 df_delayed <- df_delayed[complete.cases(df_delayed),]
 
 # Getting the minimum and maximum values for 2000H
@@ -72,19 +71,19 @@ dim(df_scaled)
 
 # Train-test Split
 df_scaled_train <- df_scaled[1:380,]
-df_scaled_test = df_scaled[380:463,]
+df_scaled_test = df_scaled[381:463,]
 
 # Create the input and output matrices
-#train_inputs <- data.matrix(df_scaled_train[, 2:6])
-#train_outputs <- data.matrix(df_scaled_train$`X2000H`)
 
 IO_1 <- `X2000H`~t1+t2+t3+t4+t7
 IO_2 <- `X2000H`~t1+t2+t3+t4+t7+`X1900H`
-IO_3 <- `X2000H`~t1+t2+t3+t4+t7+`X2000H`
-IO_4 <- `X2000H`~t1+t2+t3+t4+t7+`X1900H`+`X2000H`
+IO_3 <- `X2000H`~t1+t2+t3+t4+t7+`X1800H`
+IO_4 <- `X2000H`~t1+t2+t3+t4+t7+`X1900H`+`X1800H`
 
-hidden_layer_1 <- c(5)
-hidden_layer_2 <- c(5,10)
+# Different Internal Structures
+
+hidden_layer_1 <- c(12)
+hidden_layer_2 <- c(6,2)
 hidden_layer_3 <- c(15)
 hidden_layer_4 <- c(8,4)
 
@@ -92,12 +91,14 @@ acti_func_1 <- "logistic"
 acti_func_2 <- "tanh"
 
 # Training
+
+set.seed(123) # set the seed for training to be consistent
 time_start <- Sys.time()
-model_1 <- neuralnet(
+model_NARX <- neuralnet(
   IO_4,
   data = df_scaled_train,
-  hidden = hidden_layer_2,
-  act.fct = "logistic",
+  hidden = c(6,2),
+  act.fct = acti_func_2,
   linear.output = F
 )
 time_end <- Sys.time()
@@ -105,15 +106,15 @@ time_train <- time_end-time_start
 print(time_train)
 
 # look at the parameters inside the above code
-summary(model_1)
-model_1$result.matrix
+summary(model_NARX)
+model_NARX$result.matrix
 
 # plotting nn model
-plot(model_1)
+plot(model_NARX)
 
 # Testing
 # Compute predictions on test dataset
-model_1_results <- predict(model_1, df_scaled_test)
+model_1_results <- predict(model_NARX, df_scaled_test)
 predictions <- model_1_results
 
 # Convert predictions back to the original scale
