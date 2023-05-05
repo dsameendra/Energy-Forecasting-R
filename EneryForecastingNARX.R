@@ -1,7 +1,6 @@
 library(readxl) # for reading Excel files
 library(neuralnet)
 library(dplyr)
-library(tidyverse)
 library(MLmetrics)
 library(ggplot2)
 
@@ -73,37 +72,29 @@ dim(df_scaled)
 df_scaled_train <- df_scaled[1:380,]
 df_scaled_test = df_scaled[381:463,]
 
+# Part J
 # Create the input and output matrices
-
 IO_1 <- `X2000H`~t1+t2+t3+t4+t7
 IO_2 <- `X2000H`~t1+t2+t3+t4+t7+`X1900H`
 IO_3 <- `X2000H`~t1+t2+t3+t4+t7+`X1800H`
 IO_4 <- `X2000H`~t1+t2+t3+t4+t7+`X1900H`+`X1800H`
 
-# Different Internal Structures
+# Activation Functions
+acti_func_L <- "logistic"
+acti_func_T <- "tanh"
 
-hidden_layer_1 <- c(12)
-hidden_layer_2 <- c(6,2)
-hidden_layer_3 <- c(15)
-hidden_layer_4 <- c(8,4)
-
-acti_func_1 <- "logistic"
-acti_func_2 <- "tanh"
+# Hidden layers
+hid_layer_structute <- c(7,2)
 
 # Training
-
-set.seed(123) # set the seed for training to be consistent
-time_start <- Sys.time()
+set.seed(42) # set the seed for training to be consistent
 model_NARX <- neuralnet(
   IO_4,
   data = df_scaled_train,
-  hidden = c(6,2),
-  act.fct = acti_func_2,
-  linear.output = F
+  hidden = c(7,2),
+  act.fct = "tanh",
+  linear.output = T
 )
-time_end <- Sys.time()
-time_train <- time_end-time_start
-print(time_train)
 
 # look at the parameters inside the above code
 summary(model_NARX)
@@ -137,7 +128,7 @@ cat("MAE:", mae, "\n")
 cat("MAPE:", mape, "\n")
 cat("sMAPE:", smape, "\n")
 
-
+# Part I
 # Plot the predicted vs. actual values graph (Scatter plit)
 plot(x=predictions_denormalized, y=actuals,
      xlab='Predicted Values',

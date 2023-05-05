@@ -1,9 +1,8 @@
 library(readxl) # for reading Excel files
-library(neuralnet)
-library(dplyr)
-library(MLmetrics)
-library(ggplot2)
-library(tidyverse)
+library(neuralnet) # used to create and train NNs
+library(dplyr) # used to created lagged data
+library(MLmetrics) # used to evaluate NN models
+library(tidyverse) # collection of packages including ggplot
 
 # Normalize function
 normalize <- function(x) {
@@ -45,6 +44,7 @@ ggplot(df, aes(x = date, y = `2000H`)) +
        x = "Date",
        y = "Electricity Consumption (kWh)")
 
+# Part B
 # Creating IO Matrix
 # Create time-delayed versions of the "2000H" column up to t4 and t7
 df_delayed <- df %>% 
@@ -66,6 +66,7 @@ max_value <- max(df[4])
 print(min_value)
 print(max_value)
 
+# Part C
 #Scaling with normalize function
 df_scaled <- as.data.frame(lapply(df_delayed[4:9], normalize)) # only 2000H and delayed values are taken
 
@@ -79,44 +80,32 @@ df_scaled_test = df_scaled[381:nrow(df_scaled),]
 dim(df_scaled_train)
 dim(df_scaled_test)
 
+# Part D
 ## Creating Different Input/Output Formulas
 IO_1 <- `X2000H`~t1
 IO_2 <- `X2000H`~t1+t2+t3
 IO_3 <- `X2000H`~t1+t2+t3+t7
 IO_4 <- `X2000H`~t1+t2+t3+t4+t7
-
-## Creating Different Internal Structures
-
-# Hidden Layer Structures
-hl5 <- c(5)
-hl5_10 <- c(5,10)
-hl15 <- c(15)
-hl12 <- c(12)
-hl8_4 <- c(8,4)
-ht4_8 <- c(4,8)
-hl6_6 <- c(6,6)
-hl6_2 <- c(6,2)
-hl4_4 <- c(4,4)
-hl20_50 <- c(20,50)
+IO_5 <- `X2000H`~t1+t7
+IO_6 <- `X2000H`~t7
 
 # Activation Functions
 acti_func_L <- "logistic"
 acti_func_T <- "tanh"
 
+# Hidden layers
+hid_layer_structute <- c(5,2)
+
 ## Training
 
 set.seed(42) # setting a seed for training to be consistent
-time_start <- Sys.time()
 model_AR <- neuralnet(
-  IO_3,
+  IO_5,
   data = df_scaled_train,
-  hidden = c(20),
+  hidden = hid_layer_structute,
   act.fct = acti_func_T,
   linear.output = F
 )
-time_finish <- Sys.time()
-time_train <- time_finish-time_start
-cat("Time to train: ", time_train, "s. \n")
 
 # look at the parameters inside the above code
 summary(model_AR)
@@ -154,4 +143,22 @@ cat("RMSE:", rmse, "\n")
 cat("MAE:", mae, "\n")
 cat("MAPE:", mape, "\n")
 cat("sMAPE:", smape, "\n")
+
+# Part I
+# Plot the predicted vs. actual values graph (Scatter plit)
+plot(x=predictions_denormalized, y=actuals,
+     xlab='Predicted Values',
+     ylab='Actual Values',
+     main='Scatter plot: Predicted vs. Actual Values')
+abline(a = 0, b = 1, col = 'red') # adding a red line denoting perfect predictions
+
+# Line chart
+ggplot() +
+  geom_line(aes(x = seq_along(actuals), y = actuals, color = "True Values")) +
+  geom_line(aes(x = seq_along(predictions_denormalized), y = predictions_denormalized, color = "Predictions")) +
+  xlab("Sample Index") +
+  ylab("Value") +
+  scale_color_manual(values = c("True Values" = "blue", "Predictions" = "red")) +
+  theme_classic()+
+  labs(title = "Line Chart: Predicted vs. Actual Values")
 

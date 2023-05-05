@@ -68,7 +68,7 @@ for (col in colnames(df_outlier_removal)) {
   classes <- as.data.frame(classes)
 }
 
-# Change classes col
+# Change classes col name, as it was chaged in outlier removal function
 colnames(classes)[1] <- "Class"
 dim(classes)
 
@@ -93,7 +93,7 @@ scaled_df_no_outliers <- as.data.frame(scaled_df_no_outliers)
 scaled_df_no_outliers
 dim(scaled_df_no_outliers)
 boxplot(scaled_df_no_outliers) # boxplot after scaling
-
+summary(scaled_df_no_outliers)
 
 ## PART B
 
@@ -106,24 +106,19 @@ nbclust_result <-
     scaled_df_no_outliers,
     distance = "euclidean",
     min.nc = 2,
-    max.nc = 10,
+    max.nc = 5,
     method = "kmeans",
     index = "all"
   )
-
-table(nbclust_result$Best.n[1,])
-
 
 barplot(table(nbclust_result$Best.n[1,]),
         xlab="Numer of Clusters",
         ylab="Number of Criteria")
 
+print(nbclust_result)
 
 # Elbow method
-#k = 2:10
 set.seed(42)
-#WSS = sapply(k, function(k) {kmeans(scaled_df_no_outliers, centers=k)$tot.withinss})
-#plot(k, WSS, type="l", xlab= "Number of k clusters", ylab="Within-clusters sum of squares")
 fviz_nbclust(scaled_df_no_outliers, kmeans, method = 'wss')
 
 # Gap statistics method
@@ -137,9 +132,8 @@ fviz_nbclust(scaled_df_no_outliers, kmeans, method = 'silhouette')
 
 ## Part C
 
-# Perform k-means clustering with the most favored k from automated tools
+# Performing k-means clustering with the most favored k from automated tools
 k = 3
-print(k)
 kmeans_result <-
   kmeans(scaled_df_no_outliers, centers = k, nstart = 25)
 kmeans_result
@@ -156,18 +150,16 @@ fviz_cluster(
   ggtheme = theme_minimal()
 )
 
-# Plot clusters
-fviz_cluster(kmeans_result, data = scaled_df_no_outliers, 
-             geom = "point", stand = FALSE, 
-             ellipse.type = "t", ggtheme = theme_minimal()) 
+# Clusplot
+clusplot(scaled_df_no_outliers, kmeans_result$cluster, color=TRUE, shade=TRUE)
+
 
 # Plot the clusters with class labels
 fviz_cluster(kmeans_result, data = scaled_df_no_outliers) +
   geom_label(aes(label = classes$Class), size = 2, color = "black")
 
 # Create a contingency table for kmeans
-table(kmeans_result$cluster, classes$Class)  
-
+table(classes$Class, kmeans_result$cluster)  
 
 # Calculate the between_cluster_sums_of_squares (BSS) and within_cluster_sums_of_squares (WSS) indices
 WSS = kmeans_result$tot.withinss
@@ -231,7 +223,7 @@ cat("\nCumulative Score per Principal Component:\n")
 print(cumulative_score)
 
 # Choosin principal components with cumulative score > 92%
-chosen_pcs <- which(cumulative_score < 92)
+chosen_pcs <- which(cumulative_score <= 92)
 cat("\nChosen Principal Components:\n")
 print(chosen_pcs)
 
@@ -258,7 +250,7 @@ nbclust_result_pca <-
     transformed_pca_chosen,
     distance = "euclidean",
     min.nc = 2,
-    max.nc = 10,
+    max.nc = 5,
     method = "kmeans",
     index = "all"
   )
@@ -278,19 +270,17 @@ fviz_nbclust(transformed_pca_chosen, kmeans, method = 'silhouette')
 
 ## Part G
 
-# Perform k-means clustering with the most favored k from automated tools
-k = 2
-print(k)
+# Performing k-means clustering with the most favored k from automated tools
+k = 3
 kmeans_result_pca <- kmeans(transformed_pca_chosen, centers = k, nstart = 25)
 kmeans_result_pca
 
-# Visualize with cluster plot
+
+# Visualizing with cluster plot
 fviz_cluster(kmeans_result_pca, data = scaled_df_no_outliers)
 
-# Plot clusters
-fviz_cluster(kmeans_result_pca, data = scaled_df_no_outliers, 
-             geom = "point", stand = FALSE, 
-             ellipse.type = "t", ggtheme = theme_minimal()) 
+# Clusterplot v2
+clusplot(scaled_df_no_outliers, kmeans_result_pca$cluster, color=TRUE, shade=TRUE)
 
 # Plot the clusters with class labels
 fviz_cluster(kmeans_result_pca, data = scaled_df_no_outliers) +
@@ -303,7 +293,8 @@ fviz_cluster(
   ellipse.type = "euclid",
   star.plot = TRUE,
   repel = TRUE,
-  ggtheme = theme_minimal()
+  ggtheme = theme_minimal(),
+  title = "Clusterplot with euclidean distances PCA"
 )
 
 # Create a contingency table for pca kmeans
@@ -318,16 +309,16 @@ cat("WSS:", WSS_pca)
 cat("BSS:", BSS_pca)
 cat("TSS:", TSS_pca)
 
-# Calculate the BSS/TSS Ratio
+# Calculating the BSS/TSS Ratio
 BSS_ratio_pca <- BSS_pca / TSS_pca
 cat("BSS/TSS Ratio:", BSS_ratio_pca)
 
 
 ## Part H
-# Calculate cluster membership for each observation
+# Calculating cluster membership for each observation
 cluster_membership_pca <- kmeans_result_pca$cluster
 
-# Calculate dissimilarity matrix from the transformed dataset
+# Calculating dissimilarity matrix from the transformed dataset
 dist_matrix_pca <- dist(transformed_pca_chosen)
 
 
@@ -338,7 +329,7 @@ fviz_silhouette(sil)
 
 ## Part I
 
-# Calculate Calinski-Harabasz Index
+# Calculating Calinski-Harabasz Index
 calinski_harabasz_index <-
   cluster.stats(dist_matrix_pca, cluster_membership_pca)$ch  # Calculate Calinski-Harabasz Index
 
